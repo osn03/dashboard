@@ -41,8 +41,11 @@ export interface AppOptions {
   assistant?: AssistantService;
   /** Address the server listens on. The subscription assistant requires a loopback address. */
   bindHost?: string;
-  /** Told when a dashboard tab connects (+1) or goes away (-1). Used to stop the server with the browser. */
-  presence?: (delta: 1 | -1) => void;
+  /**
+   * Told when a dashboard tab connects ('open'), when its connection ends ('lost'), and when a
+   * tab says it is being closed ('closed'). Used to stop the server with the browser.
+   */
+  presence?: (event: 'open' | 'lost' | 'closed') => void;
   /** Sample data in a separate database; integrations make no network calls. */
   demo?: boolean;
 }
@@ -102,10 +105,10 @@ export function createApp({ db, cookieSecure, google, intervals, assistant, pres
     streamSSE(c, async (stream) => {
       let open = true;
       const leave = () => {
-        if (open) presence?.(-1);
+        if (open) presence?.('lost');
         open = false;
       };
-      presence?.(1);
+      presence?.('open');
       stream.onAbort(leave);
       try {
         while (open) {
@@ -117,6 +120,13 @@ export function createApp({ db, cookieSecure, google, intervals, assistant, pres
       }
     }),
   );
+
+  // Sent by a tab that is really being closed (or reloaded), as opposed to a connection that
+  // merely dropped because the computer slept or the browser suspended the tab.
+  app.post('/api/auth/bye', (c) => {
+    presence?.('closed');
+    return c.json({ ok: true });
+  });
 
   app.post('/api/auth/setup', async (c) => {
     if (auth.hasUser(db)) throw new HttpError(409, 'An account already exists');

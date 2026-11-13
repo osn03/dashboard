@@ -25,23 +25,98 @@ export function App() {
   }, [qc]);
 
   // Lets a launcher-started server know this tab is open (it stops when the last tab closes).
+  // The connection is re-opened whenever it ends (sleep, a suspended tab, a restarted server).
+  // A tab that is really closing says so, which lets the server stop promptly.
   useEffect(() => {
-    const alive = new EventSource('/api/auth/alive');
-    return () => alive.close();
+    let alive: EventSource | null = null;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    let stopped = false;
+    const connect = () => {
+      clearTimeout(retry);
+      if (stopped || (alive && alive.readyState !== EventSource.CLOSED)) return;
+      alive?.close();
+      alive = new EventSource('/api/auth/alive');
+      alive.onerror = () => {
+        // The browser retries dropped connections by itself, but gives up for good on an error response.
+        if (alive?.readyState === EventSource.CLOSED) retry = setTimeout(connect, 3000);
+      };
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') connect();
+    };
+    const onHide = () => {
+      void fetch('/api/auth/bye', { method: 'POST', keepalive: true, credentials: 'same-origin', headers: { 'x-requested-with': 'dashboard' } }).catch(() => undefined);
+    };
+    connect();
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('pageshow', connect);
+    window.addEventListener('online', connect);
+    window.addEventListener('pagehide', onHide);
+    return () => {
+      stopped = true;
+      clearTimeout(retry);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('pageshow', connect);
+      window.removeEventListener('online', connect);
+      window.removeEventListener('pagehide', onHide);
+      alive?.close();
+    };
   }, []);
 
   if (me.isLoading) return <p className="splash">Loading…</p>;
   if (me.isError || !me.data) {
-    return (
-      <div className="splash">
-        <h1>Cannot reach the server</h1>
-        <p>The dashboard’s backend is not responding. Start it with <code>npm run dev</code> and reload this page. Your data is stored locally and is not affected.</p>
-        <button className="btn primary" onClick={() => void me.refetch()}>Try again</button>
-      </div>
-    );
+    return <Unreachable onBack={() => qc.invalidateQueries()} />;
   }
   if (!me.data.user) return <><AuthScreen setup={me.data.needsSetup} demo={me.data.demo} /><Toasts /></>;
   return <Shell username={me.data.user.username} demo={me.data.demo} />;
+}
+
+const serverUp = () =>
+  fetch('/api/auth/me', { credentials: 'same-origin', signal: AbortSignal.timeout(1500) }).then((r) => r.ok, () => false);
+
+/**
+ * Shown when the server does not answer (for example it stopped while this tab was asleep).
+ * The button starts it again through the claudedashboard:// link handled by Dashboard.vbs,
+ * then waits for it to answer. The page also notices by itself when the server is back.
+ */
+function Unreachable({ onBack }: { onBack: () => unknown }) {
+  const [state, setState] = useState<'down' | 'starting' | 'failed'>('down');
+  useEffect(() => {
+    if (state === 'starting') return;
+    const timer = setInterval(() => void serverUp().then((up) => up && onBack()), 5000);
+    return () => clearInterval(timer);
+  }, [state, onBack]);
+
+  async function restart() {
+    setState('starting');
+    if (!(await serverUp())) {
+      window.location.href = 'claudedashboard://start'; // handled by Windows; this page stays open
+      const until = Date.now() + 45_000;
+      let up = false;
+      while (!up && Date.now() < until) {
+        await new Promise((r) => setTimeout(r, 1000));
+        up = await serverUp();
+      }
+      if (!up) return setState('failed');
+    }
+    await onBack();
+  }
+
+  return (
+    <div className="splash">
+      <h1>Cannot reach the server</h1>
+      <p>The dashboard’s server has stopped or is not responding. Your data is stored locally and is not affected.</p>
+      {state === 'starting' && <p className="muted" role="status">Starting the server… If the browser asks whether to open Windows Script Host, allow it.</p>}
+      {state === 'failed' && (
+        <p className="form-error" role="alert">
+          The server did not start. Double-click <code>Dashboard.vbs</code> in the project folder, or run <code>npm run dev</code>; this page reconnects by itself.
+        </p>
+      )}
+      <button className="btn primary" disabled={state === 'starting'} onClick={() => void restart()}>
+        {state === 'starting' ? 'Starting…' : 'Restart the server'}
+      </button>
+    </div>
+  );
 }
 
 function AuthScreen({ setup, demo }: { setup: boolean; demo: boolean }) {

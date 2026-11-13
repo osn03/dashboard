@@ -7,4 +7,23 @@
 Set fso = CreateObject("Scripting.FileSystemObject")
 Set shell = CreateObject("WScript.Shell")
 shell.CurrentDirectory = fso.GetParentFolderName(WScript.ScriptFullName)
-shell.Run "node --import tsx server\index.ts --exit-with-browser --open --log", 0, False
+
+' Registers the claudedashboard:// link for this Windows user (HKEY_CURRENT_USER only), so the
+' "Restart the server" button can start this launcher again after the server has stopped.
+' To remove it: delete HKCU\Software\Classes\claudedashboard.
+On Error Resume Next
+key = "HKCU\Software\Classes\claudedashboard\"
+shell.RegWrite key, "URL:Dashboard", "REG_SZ"
+shell.RegWrite key & "URL Protocol", "", "REG_SZ"
+shell.RegWrite key & "shell\open\command\", "wscript.exe """ & WScript.ScriptFullName & """ ""%1""", "REG_SZ"
+On Error GoTo 0
+
+' Started with an argument (the "Restart the server" button in an open dashboard tab, through
+' the claudedashboard:// link): the tab is already open, so no new tab is opened and the
+' assistant conversation is kept. The argument itself is never used.
+If WScript.Arguments.Count > 0 Then
+  mode = "--resume"
+Else
+  mode = "--open"
+End If
+shell.Run "node --import tsx server\index.ts --exit-with-browser --log " & mode, 0, False

@@ -38,7 +38,9 @@ On first visit you choose a username and password (min. 10 characters).
 
 ### Run without a terminal window
 
-Double-click **`Dashboard.vbs`** in the project folder (or make a shortcut to it on the desktop or Start menu). It starts the server with no window at all, opens the dashboard in your default browser, and the server stops by itself about 20 seconds after the last dashboard tab is closed. If the dashboard is already running, it just opens the browser.
+Double-click **`Dashboard.vbs`** in the project folder (or make a shortcut to it on the desktop or Start menu). It starts the server with no window at all, opens the dashboard in your default browser, and the server stops by itself about 20 seconds after the last dashboard tab is closed. If the dashboard is already running, it just opens the browser. Each start from the launcher begins with an empty assistant conversation (proposals and the action history are kept).
+
+If a tab only loses its connection (the computer slept, the browser suspended the tab), the server keeps running for 30 minutes of awake time (`EXIT_LOST_GRACE_MINUTES`) and the tab reconnects by itself. If the server has stopped anyway, the tab shows **Restart the server**: the button starts the launcher again through a `claudedashboard://` link that `Dashboard.vbs` registers for your Windows user on each start (the browser asks once for permission to open Windows Script Host), and the conversation is kept. To remove the link, delete `HKCU\Software\Classes\claudedashboard`.
 
 - No terminal window appears, also not later when the assistant starts Claude Code: the server runs with a hidden console that everything it starts inherits.
 - Output that the terminal would have shown goes to `data/server.log`.
