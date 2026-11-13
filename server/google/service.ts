@@ -521,7 +521,10 @@ export class GoogleService {
     const cal = this.cal(input.calendarId);
     if (!isWritable(cal.access_role)) throw new HttpError(403, `"${cal.summary}" is read-only. Choose a calendar you can write to.`);
     const tz = getSettings(this.db).timezone;
-    const body = { id: input.clientId, summary: input.title, description: input.notes, location: input.location, ...this.times(input, tz) };
+    // Standard reminders (the calendar's own defaults) unless specific times were chosen.
+    const custom = Array.isArray(input.reminders) ? [...new Set(input.reminders)] : null;
+    const reminders = custom ? { useDefault: false, overrides: custom.map((minutes) => ({ method: 'popup', minutes })) } : { useDefault: true };
+    const body = { id: input.clientId, summary: input.title, description: input.notes, location: input.location, reminders, ...this.times(input, tz) };
     const path = `/calendars/${enc(cal.google_id)}/events`;
     let item: any;
     try {

@@ -118,6 +118,11 @@ const googleBase = {
   calendarId: z.string().min(1).max(300),
   /** Client-generated event id (base32hex subset). Reusing it on retry makes creation idempotent. */
   clientId: z.string().regex(/^[a-v0-9]{5,64}$/),
+  /**
+   * 'default' = the calendar's own standard reminders (as set in Google Calendar);
+   * otherwise notification times in minutes before the start. An empty list means none.
+   */
+  reminders: z.union([z.literal('default'), z.array(z.number().int().min(0).max(40320)).max(5)]).default('default'),
   ...eventBase,
 };
 export const googleEventCreateSchema = z.discriminatedUnion('allDay', [

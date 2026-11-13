@@ -369,6 +369,19 @@ describe('writes (acceptance 4, 6)', () => {
     expect(await events()).toHaveLength(1);
   });
 
+  it('new events get the calendar’s standard reminders unless specific ones are chosen', async () => {
+    await create();
+    await create(uid(), { reminders: [10, 60, 10] });
+    await create(uid(), { reminders: [] });
+    expect(fake.calls('POST').map((p) => p.body.reminders)).toEqual([
+      { useDefault: true },
+      { useDefault: false, overrides: [{ method: 'popup', minutes: 10 }, { method: 'popup', minutes: 60 }] },
+      { useDefault: false, overrides: [] },
+    ]);
+    expect((await create(uid(), { reminders: [-5] })).status).toBe(400);
+    expect((await create(uid(), { reminders: [50000] })).status).toBe(400);
+  });
+
   it('all-day events are sent with an exclusive end date', async () => {
     await c.req('POST', '/api/google/events', { calendarId: MEC, clientId: uid(), title: 'Holiday', allDay: true, startDate: '2026-11-12', endDate: '2026-11-13' });
     expect(fake.list(ME)[0]).toMatchObject({ start: { date: '2026-11-12' }, end: { date: '2026-11-14' } });

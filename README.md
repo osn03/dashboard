@@ -82,6 +82,7 @@ While the consent screen is in **Testing**, Google expires the connection after 
 - **Settings → Google Calendar** lists every calendar of every connected account. Tick the ones to show, pick a colour for each (defaults to Google's colour), choose where **new events go**, and optionally where **copies of task time blocks** go.
 - Selected calendars are combined in all calendar views and on Today. Each event shows its calendar (and account when there are several) and uses that calendar's colour.
 - When creating an event you can choose another destination in "Save to".
+- New Google events get the calendar's **standard reminders** (the defaults you set in Google Calendar) unless you pick something else under "Reminder" (none, or a specific time before the start). Events created by the assistant always use the standard reminders.
 - **Read-only** calendars and events are marked, cannot be chosen as a destination, and are refused by the server if edited.
 - **Add another Google account** signs in a second account next to the first. Each account has its own encrypted token; signing in again with a known account reconnects it. One account losing access does not affect the other.
 - Each calendar has its own sync token and its own event store, keyed by (calendar, event id), so the same id in two calendars never collides. A calendar shared into two connected accounts shows up once per account — tick only one of them.

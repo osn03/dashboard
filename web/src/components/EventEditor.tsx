@@ -49,6 +49,19 @@ function TrainingDetails({ event, onClose }: { event: CalEvent; onClose: () => v
 }
 const LOCAL = '__local__';
 
+/** Reminder choices for a new Google event: [value, label]. Values are minutes before the start. */
+const STANDARD = 'default';
+const TIMED_REMINDERS: [string, string][] = [
+  [STANDARD, 'Standard (the calendar’s default)'], ['none', 'No reminder'], ['0', 'At the start'], ['5', '5 minutes before'],
+  ['10', '10 minutes before'], ['15', '15 minutes before'], ['30', '30 minutes before'], ['60', '1 hour before'],
+  ['120', '2 hours before'], ['1440', '1 day before'], ['2880', '2 days before'], ['10080', '1 week before'],
+];
+// All-day events start at midnight, so "minutes before" lands on an earlier day.
+const ALL_DAY_REMINDERS: [string, string][] = [
+  [STANDARD, 'Standard (the calendar’s default)'], ['none', 'No reminder'], ['900', 'The day before at 09:00'],
+  ['420', 'The day before at 17:00'], ['2340', '2 days before at 09:00'], ['9540', '1 week before at 09:00'],
+];
+
 function EventForm({ event, defaults, onClose }: { event?: CalEvent; defaults?: Defaults; onClose: () => void }) {
   const { tz, settings } = useEnv();
   const actions = useActions();
@@ -86,6 +99,10 @@ function EventForm({ event, defaults, onClose }: { event?: CalEvent; defaults?: 
   const [notes, setNotes] = useState(event?.notes ?? '');
   const [target, setTarget] = useState<string | null>(null); // null = follow the default until the user picks
   const [scope, setScope] = useState<'occurrence' | 'series'>('occurrence');
+  const [reminderChoice, setReminderChoice] = useState(STANDARD);
+  const reminderOptions = allDay ? ALL_DAY_REMINDERS : TIMED_REMINDERS;
+  // A choice that does not exist for the other kind of event (timed vs all-day) falls back to standard.
+  const reminder = reminderOptions.some(([v]) => v === reminderChoice) ? reminderChoice : STANDARD;
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   // One id per dialog: pressing Save again after a failure re-sends the same id, so Google cannot create a duplicate.
@@ -114,7 +131,10 @@ function EventForm({ event, defaults, onClose }: { event?: CalEvent; defaults?: 
     if (!event) {
       ok = saveTo === LOCAL
         ? await actions.createEvent({ ...times, ...text, allDay } as never)
-        : await actions.createGoogleEvent({ ...times, ...text, allDay, calendarId: saveTo, clientId });
+        : await actions.createGoogleEvent({
+            ...times, ...text, allDay, calendarId: saveTo, clientId,
+            reminders: reminder === STANDARD ? STANDARD : reminder === 'none' ? [] : [Number(reminder)],
+          });
     } else if (g) {
       // Send only what changed, so an untouched field can never overwrite a newer value in Google.
       const patch: Record<string, unknown> = { scope: recurring ? scope : 'occurrence' };
@@ -238,6 +258,15 @@ function EventForm({ event, defaults, onClose }: { event?: CalEvent; defaults?: 
               <textarea rows={3} value={notes} disabled={readOnly} onChange={(e) => setNotes(e.target.value)} />
             </label>
           </>
+        )}
+
+        {!event && saveTo !== LOCAL && (
+          <label className="field">
+            <span>Reminder</span>
+            <select value={reminder} onChange={(e) => setReminderChoice(e.target.value)}>
+              {reminderOptions.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+            </select>
+          </label>
         )}
 
         {g && recurring && !readOnly && (
